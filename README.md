@@ -27,6 +27,6 @@ You can configure this as a default config-script for all new zPods using the `f
 In the `zpodcore` directory, run:
 ```bash
 # Set default config-scripts (comma-separated)
-just zcli setting create -n ff_default_config_scripts -v "vdsnsx"
+just zcli setting create -n ff_default_config_scripts -v "vdsnsx" -d ""
 ```
 
