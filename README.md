@@ -17,7 +17,7 @@ The `vdsnsx` config-script is designed to work with zPodFactory's config-scripts
 
 In the `zpodcore` directory, run:
 ```bash
-git clone https://github.com/carsso/vdsnsx.git zpodengine/src/zpodengine/config_scripts/vdsnsx
+git clone https://github.com/carsso/zPodFactory-vdsnsx.git zpodengine/src/zpodengine/config_scripts/vdsnsx
 ```
 
 ### Set as global default configuration
