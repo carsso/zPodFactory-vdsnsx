@@ -89,9 +89,12 @@ def execute_config_script(
         print("Creating Uplink Host Switch Profile...")
         uplink_profile = create_uplink_host_switch_profile(nsx)
 
-        # 7. Get Transport Zones
-        print("Getting Transport Zones...")
-        overlay_tz = get_transport_zone(nsx, "nsx-overlay-transportzone", "OVERLAY")
+        # 7. Create overlay_backed Transport Zone and get Transport Zones
+        print("Creating overlay_backed Transport Zone...")
+        overlay_tz = create_overlay_backed_transport_zone(
+            nsx, "nsx-overlay-transportzone", "nsx-overlay-backed-transportzone"
+        )
+        print("Getting VLAN Transport Zone...")
         vlan_tz = get_transport_zone(nsx, "nsx-vlan-transportzone", "VLAN")
 
         # 8. Retrieve the DVS ID from the compute manager
@@ -516,6 +519,94 @@ def get_transport_zone(
         )
 
     return zone
+
+
+def create_overlay_backed_transport_zone(
+    nsx: NsxClient, source_tz_name: str, new_tz_name: str
+) -> Dict[str, Any]:
+    """Create a new overlay_backed transport zone identical to source and set it as default"""
+    # Get the source transport zone to copy its properties
+    source_tz = get_transport_zone(nsx, source_tz_name, "OVERLAY")
+
+    # Get full details of the source transport zone
+    tz_id = source_tz.get("id")
+    if not tz_id:
+        raise ValueError(f"Source transport zone '{source_tz_name}' has no ID")
+
+    # Get detailed transport zone info
+    response = nsx.get(
+        url=f"/policy/api/v1/infra/sites/default/enforcement-points/default/transport-zones/{tz_id}"
+    )
+    source_tz_details = response.safejson()
+
+    # Create new transport zone with overlay_backed type
+    new_tz_id = new_tz_name.lower().replace(" ", "-").replace("_", "-")
+
+    # Check if transport zone already exists and is overlay_backed
+    try:
+        check_response = nsx.get(
+            url=f"/policy/api/v1/infra/sites/default/enforcement-points/default/transport-zones/{new_tz_id}"
+        )
+        existing_tz = check_response.safejson()
+        if existing_tz and "id" in existing_tz:
+            # Verify it's overlay_backed type
+            if existing_tz.get("tz_type") == "OVERLAY_BACKED":
+                print(f"Transport Zone '{new_tz_name}' (overlay_backed) already exists")
+                # Ensure it's set as default
+                if not existing_tz.get("is_default", False):
+                    print(f"Setting Transport Zone '{new_tz_name}' as default...")
+                    update_payload = existing_tz.copy()
+                    update_payload["is_default"] = True
+                    nsx.put(
+                        url=f"/policy/api/v1/infra/sites/default/enforcement-points/default/transport-zones/{new_tz_id}",
+                        json=update_payload,
+                    )
+                if "path" not in existing_tz:
+                    existing_tz["path"] = (
+                        f"/infra/sites/default/enforcement-points/default/transport-zones/{existing_tz['id']}"
+                    )
+                return existing_tz
+            else:
+                print(
+                    f"Warning: Transport Zone '{new_tz_name}' exists but is not overlay_backed type"
+                )
+    except Exception:
+        # Transport zone doesn't exist, we'll create it
+        pass
+
+    # Prepare payload for new transport zone
+    # Copy properties from source but change type to OVERLAY_BACKED
+    payload = {
+        "resource_type": "PolicyTransportZone",
+        "display_name": new_tz_name,
+        "tz_type": "OVERLAY_BACKED",
+        "is_default": True,  # Set as default transport zone
+    }
+
+    # Copy other relevant properties from source if they exist
+    if "description" in source_tz_details:
+        payload["description"] = source_tz_details["description"]
+    if "host_switch_name" in source_tz_details:
+        payload["host_switch_name"] = source_tz_details["host_switch_name"]
+    if "host_switch_id" in source_tz_details:
+        payload["host_switch_id"] = source_tz_details["host_switch_id"]
+
+    # Create the new transport zone using PUT
+    print(f"Creating overlay_backed transport zone '{new_tz_name}'...")
+    response = nsx.put(
+        url=f"/policy/api/v1/infra/sites/default/enforcement-points/default/transport-zones/{new_tz_id}",
+        json=payload,
+    )
+    new_tz = response.safejson()
+
+    # Ensure the zone has a 'path' key
+    if "path" not in new_tz and "id" in new_tz:
+        new_tz["path"] = (
+            f"/infra/sites/default/enforcement-points/default/transport-zones/{new_tz['id']}"
+        )
+
+    print(f"Transport Zone '{new_tz_name}' created and set as default")
+    return new_tz
 
 
 def get_existing_transport_node_profile(
