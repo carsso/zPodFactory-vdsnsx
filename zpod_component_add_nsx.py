@@ -3,12 +3,15 @@ import ssl
 import time
 from typing import Any, Dict
 
+from prefect import task
+
 from zpodcommon import models as M
 from zpodcommon.lib.dbutils import DBUtils
 from zpodcommon.lib.nsx import NsxClient
 from zpodengine.lib import database
 
 
+@task(timeout_seconds=1800)
 def execute_config_script(
     zpod_component_id: int,
 ) -> None:

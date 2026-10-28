@@ -1,10 +1,13 @@
 import os
 
+from prefect import task
+
 from zpodcommon import models as M
 from zpodengine.lib import database
 from zpodengine.lib.commands import cmd_execute
 
 
+@task(timeout_seconds=1200)
 def execute_config_script(
     zpod_component_id: int,
 ) -> None:
